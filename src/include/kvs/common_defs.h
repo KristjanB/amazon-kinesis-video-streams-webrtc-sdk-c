@@ -506,28 +506,56 @@ typedef struct stat STAT_STRUCT;
 #endif
 
 //
-// File operations
+// File operations  
 //
+#ifndef CFGMGR_TYPES_INCLUDED
+#define CFGMGR_TYPES_INCLUDED
+
+#include "vfs.h" // For struct stat definition
+#include <stdint.h>
+#include <stddef.h>
+
+// FILE* wrapper structure for compatibility with existing code
+typedef struct {
+    char filename[256];
+    uint8_t *data;
+    size_t size;
+    size_t position;
+    int mode; // 0=read, 1=write
+    int valid;
+} CFGMGR_FILE;
+
+// Function declarations
+CFGMGR_FILE* cfgmgr_fopen(const char *filename, const char *mode);
+int cfgmgr_fclose(CFGMGR_FILE* fp);
+size_t cfgmgr_fread(void *ptr, size_t size, size_t count, CFGMGR_FILE* fp);
+size_t cfgmgr_fwrite(const void *ptr, size_t size, size_t count, CFGMGR_FILE* fp);
+int cfgmgr_fseek(CFGMGR_FILE* fp, long offset, int whence);
+long cfgmgr_ftell(CFGMGR_FILE* fp);
+int cfgmgr_fstat(const char *filename, struct stat *st);
+
+#endif // CFGMGR_TYPES_INCLUDED
+
 #ifndef FOPEN
-#define FOPEN fopen
+#define FOPEN cfgmgr_fopen
 #endif
 #ifndef FCLOSE
-#define FCLOSE fclose
+#define FCLOSE cfgmgr_fclose
 #endif
 #ifndef FWRITE
-#define FWRITE fwrite
+#define FWRITE cfgmgr_fwrite
 #endif
 #ifndef FPUTC
 #define FPUTC fputc
 #endif
 #ifndef FREAD
-#define FREAD fread
+#define FREAD cfgmgr_fread
 #endif
 #ifndef FSEEK
-#define FSEEK fseek
+#define FSEEK cfgmgr_fseek
 #endif
 #ifndef FTELL
-#define FTELL ftell
+#define FTELL cfgmgr_ftell
 #endif
 #ifndef FREMOVE
 #define FREMOVE remove
@@ -563,7 +591,7 @@ typedef struct stat STAT_STRUCT;
 #define FRMDIR GLOBAL_RMDIR
 #endif
 #ifndef FSTAT
-#define FSTAT GLOBAL_STAT
+#define FSTAT cfgmgr_fstat
 #endif
 #ifndef FSCANF
 #define FSCANF fscanf

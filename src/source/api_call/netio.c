@@ -119,24 +119,16 @@ static int prvInitConfig(NetIo_t* pxNet, const char* pcRootCA, const char* pcCer
             NetIo_setSendTimeout(pxNet, pxNet->uSendTimeoutMs);
 
             if (pcRootCA != NULL && pcCert != NULL && pcPrivKey != NULL) {
-                if (bFilePath == false &&
-                    (mbedtls_x509_crt_parse(pxNet->pRootCA, (void*) pcRootCA, strlen(pcRootCA) + 1) != 0 ||
-                     mbedtls_x509_crt_parse(pxNet->pCert, (void*) pcCert, strlen(pcCert) + 1) != 0 ||
+                // Always use memory parsing (no file system support)
+                if (mbedtls_x509_crt_parse(pxNet->pRootCA, (void*) pcRootCA, strlen(pcRootCA) + 1) != 0 ||
+                    mbedtls_x509_crt_parse(pxNet->pCert, (void*) pcCert, strlen(pcCert) + 1) != 0 ||
 #if (MBEDTLS_VERSION_NUMBER == 0x03000000 || MBEDTLS_VERSION_NUMBER == 0x03020100)
-                     mbedtls_pk_parse_key(pxNet->pPrivKey, (void*) pcPrivKey, strlen(pcPrivKey) + 1, NULL, 0, mbedtls_test_rnd_std_rand, NULL) !=
-                         0)) {
+                    mbedtls_pk_parse_key(pxNet->pPrivKey, (void*) pcPrivKey, strlen(pcPrivKey) + 1, NULL, 0, mbedtls_test_rnd_std_rand, NULL) != 0) {
 #else
-                     mbedtls_pk_parse_key(pxNet->pPrivKey, (void*) pcPrivKey, strlen(pcPrivKey) + 1, NULL, 0) != 0)) {
+                    mbedtls_pk_parse_key(pxNet->pPrivKey, (void*) pcPrivKey, strlen(pcPrivKey) + 1, NULL, 0) != 0) {
 #endif
-                    DLOGE("Failed to parse x509");
+                    DLOGE("Failed to parse x509 from memory");
                     xRes = STATUS_NULL_ARG;
-                } else if (mbedtls_x509_crt_parse_file(pxNet->pRootCA, (void*) pcRootCA) != 0 ||
-                           mbedtls_x509_crt_parse_file(pxNet->pCert, (void*) pcCert) != 0 ||
-#if (MBEDTLS_VERSION_NUMBER == 0x03000000 || MBEDTLS_VERSION_NUMBER == 0x03020100)
-                           mbedtls_pk_parse_keyfile(pxNet->pPrivKey, (void*) pcPrivKey, NULL, mbedtls_test_rnd_std_rand, NULL) != 0) {
-#else
-                           mbedtls_pk_parse_keyfile(pxNet->pPrivKey, (void*) pcPrivKey, NULL) != 0) {
-#endif
                 } else {
                     mbedtls_ssl_conf_authmode(&(pxNet->xConf), MBEDTLS_SSL_VERIFY_REQUIRED);
                     mbedtls_ssl_conf_ca_chain(&(pxNet->xConf), pxNet->pRootCA, NULL);

@@ -5,6 +5,7 @@
 
 #include "io_buffer.h"
 #include "Rtp.h"
+#include <string.h>
 
 STATUS tls_session_create(PTlsSessionCallbacks pCallbacks, PTlsSession* ppTlsSession)
 {
@@ -28,7 +29,9 @@ STATUS tls_session_create(PTlsSessionCallbacks pCallbacks, PTlsSession* ppTlsSes
     mbedtls_ssl_config_init(&pTlsSession->sslCtxConfig);
     mbedtls_ssl_init(&pTlsSession->sslCtx);
     CHK(mbedtls_ctr_drbg_seed(&pTlsSession->ctrDrbg, mbedtls_entropy_func, &pTlsSession->entropy, NULL, 0) == 0, STATUS_TLS_CREATE_SSL_FAILED);
-    CHK(mbedtls_x509_crt_parse_file(&pTlsSession->cacert, KVS_CA_CERT_PATH) == 0, STATUS_TLS_INVALID_CA_CERT_PATH);
+    // Use ROOT_CA certificate from project.h directly (no file system needed)
+    #include "project.h"
+    CHK(mbedtls_x509_crt_parse(&pTlsSession->cacert, (const unsigned char*)ROOT_CA, strlen(ROOT_CA) + 1) == 0, STATUS_TLS_INVALID_CA_CERT_PATH);
 
 CleanUp:
     if (STATUS_FAILED(retStatus) && pTlsSession != NULL) {

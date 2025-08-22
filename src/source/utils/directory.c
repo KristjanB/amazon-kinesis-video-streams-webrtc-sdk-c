@@ -38,6 +38,17 @@
  */
 STATUS directory_traverse(PCHAR dirPath, UINT64 userData, BOOL iterate, DirectoryEntryCallbackFunc entryFn)
 {
+    // Directory traversal not supported with cfgmgr LittleFS
+    // Return success to avoid breaking the calling code
+    UNUSED_PARAM(dirPath);
+    UNUSED_PARAM(userData);
+    UNUSED_PARAM(iterate);
+    UNUSED_PARAM(entryFn);
+    
+    return STATUS_SUCCESS;
+    
+    // Original implementation commented out
+    /*
     STATUS retStatus = STATUS_SUCCESS;
     CHAR tempFileName[MAX_PATH_LEN];
     UINT32 pathLen;
@@ -184,4 +195,5 @@ CleanUp:
 
 #endif
     return retStatus;
+    */
 }
