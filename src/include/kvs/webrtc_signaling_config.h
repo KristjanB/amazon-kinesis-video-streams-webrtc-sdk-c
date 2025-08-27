@@ -1,0 +1,8 @@
+#ifndef _WEBRTC_SIGNALING_CONFIG_H_
+#define _WEBRTC_SIGNALING_CONFIG_H_
+
+/* File cache path */
+#define KVS_WEBRTC_SIGNALING_CACHE_FILE_PATH "WebRTCSignalingCache_v0"
+
+
+#endif /* _WEBRTC_SIGNALING_CONFIG_H_ */
