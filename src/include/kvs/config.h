@@ -24,7 +24,8 @@ extern "C" {
  * HEADERS
  ******************************************************************************/
  /* Config for Ameba-Pro */
-#include "webrtc_signaling_config.h"
+// #include "webrtc_signaling_config.h"
+#include "../../../../webrtc_config.h"
 
 /******************************************************************************
  * DEFINITIONS

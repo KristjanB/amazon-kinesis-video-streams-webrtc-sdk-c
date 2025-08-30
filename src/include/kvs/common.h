@@ -28,7 +28,7 @@ extern "C" {
 #include "stack_queue.h"
 
 /* Config for Ameba-Pro */
-#include "sample_config_webrtc.h"
+#include "../../../../webrtc_config.h"
 
 #ifndef JSMN_HEADER
 #define JSMN_HEADER
