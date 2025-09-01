@@ -119,15 +119,28 @@ static int prvInitConfig(NetIo_t* pxNet, const char* pcRootCA, const char* pcCer
             NetIo_setSendTimeout(pxNet, pxNet->uSendTimeoutMs);
 
             if (pcRootCA != NULL && pcCert != NULL && pcPrivKey != NULL) {
-                // Always use memory parsing (no file system support)
-                if (mbedtls_x509_crt_parse(pxNet->pRootCA, (void*) pcRootCA, strlen(pcRootCA) + 1) != 0 ||
-                    mbedtls_x509_crt_parse(pxNet->pCert, (void*) pcCert, strlen(pcCert) + 1) != 0 ||
+                // Use memory-based parsing for embedded system (no file system)
+                int parse_result = 0;
+                
+                // Parse root CA certificate from memory
+                int root_ca_result = mbedtls_x509_crt_parse(pxNet->pRootCA, (const unsigned char*)pcRootCA, strlen(pcRootCA) + 1);
+                parse_result |= root_ca_result;
+                
+                // Parse device certificate from memory 
+                int cert_result = mbedtls_x509_crt_parse(pxNet->pCert, (const unsigned char*)pcCert, strlen(pcCert) + 1);
+                parse_result |= cert_result;
+                
+                // Parse private key from memory
+                int key_result;
 #if (MBEDTLS_VERSION_NUMBER == 0x03000000 || MBEDTLS_VERSION_NUMBER == 0x03020100)
-                    mbedtls_pk_parse_key(pxNet->pPrivKey, (void*) pcPrivKey, strlen(pcPrivKey) + 1, NULL, 0, mbedtls_test_rnd_std_rand, NULL) != 0) {
+                key_result = mbedtls_pk_parse_key(pxNet->pPrivKey, (const unsigned char*)pcPrivKey, strlen(pcPrivKey) + 1, NULL, 0, mbedtls_test_rnd_std_rand, NULL);
 #else
-                    mbedtls_pk_parse_key(pxNet->pPrivKey, (void*) pcPrivKey, strlen(pcPrivKey) + 1, NULL, 0) != 0) {
+                key_result = mbedtls_pk_parse_key(pxNet->pPrivKey, (const unsigned char*)pcPrivKey, strlen(pcPrivKey) + 1, NULL, 0);
 #endif
-                    DLOGE("Failed to parse x509 from memory");
+                parse_result |= key_result;
+                
+                if (parse_result != 0) {
+                    printf("Failed to parse certificates from memory, total result: %d\n", parse_result);
                     xRes = STATUS_NULL_ARG;
                 } else {
                     mbedtls_ssl_conf_authmode(&(pxNet->xConf), MBEDTLS_SSL_VERIFY_REQUIRED);
