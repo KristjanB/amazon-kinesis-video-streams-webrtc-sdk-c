@@ -22,6 +22,9 @@
 #include "wss_api.h"
 #include "netio.h"
 
+// Include cfgmgr file I/O for certificate loading
+extern int cfgmgr_file_read(const char *filename, uint8_t *buffer, size_t buffer_size, size_t *bytes_read);
+
 /******************************************************************************
  * DEFINITION
  ******************************************************************************/
@@ -718,10 +721,17 @@ STATUS http_api_getIotCredential(PIotCredentialProvider pIotCredentialProvider)
     CHK(SNPRINTF(pUrl, urlLen, "%s%s%s%c%s%s", CONTROL_PLANE_URI_PREFIX, pIotCredentialProvider->iotGetCredentialEndpoint, HTTP_API_ROLE_ALIASES, '/',
                  pIotCredentialProvider->roleAlias, HTTP_API_CREDENTIALS) > 0,
         STATUS_HTTP_IOT_FAILED);
+    
+    // Extract hostname from URL for NetIo connection
+    PCHAR pHostStart, pHostEnd;
+    CHK_STATUS(getRequestHost(pUrl, &pHostStart, &pHostEnd));
+    CHK(pHostEnd == NULL || *pHostEnd == '/' || *pHostEnd == '?', STATUS_INTERNAL_ERROR);
+    MEMCPY(pHost, pHostStart, pHostEnd - pHostStart);
+    pHost[pHostEnd - pHostStart] = '\0';
 
     // Create the request info with the body
-    CHK_STATUS(request_info_create(pUrl, pHttpBody, DEFAULT_AWS_REGION, pIotCredentialProvider->caCertPath, pIotCredentialProvider->certPath,
-                                   pIotCredentialProvider->privateKeyPath, SSL_CERTIFICATE_TYPE_NOT_SPECIFIED, DEFAULT_USER_AGENT_NAME,
+    CHK_STATUS(request_info_create(pUrl, pHttpBody, DEFAULT_AWS_REGION, NULL, NULL,
+                                   NULL, SSL_CERTIFICATE_TYPE_NOT_SPECIFIED, DEFAULT_USER_AGENT_NAME,
                                    HTTP_API_CONNECTION_TIMEOUT, HTTP_API_COMPLETION_TIMEOUT, DEFAULT_LOW_SPEED_LIMIT, DEFAULT_LOW_SPEED_TIME_LIMIT,
                                    pIotCredentialProvider->pAwsCredentials, &pRequestInfo));
 
@@ -732,6 +742,10 @@ STATUS http_api_getIotCredential(PIotCredentialProvider pIotCredentialProvider)
     //                             HTTP_API_COMPLETION_TIMEOUT, DEFAULT_LOW_SPEED_LIMIT, DEFAULT_LOW_SPEED_TIME_LIMIT,
     //                             pIotCredentialProvider->pAwsCredentials, &pRequestInfo));
 
+    int len = STRLEN(pIotCredentialProvider->thingName);
+    pIotCredentialProvider->thingName[len] = '\0';
+
+
     CHK_STATUS(request_header_set(pRequestInfo, HTTP_API_IOT_THING_NAME_HEADER, 0, pIotCredentialProvider->thingName, 0));
     CHK_STATUS(request_header_set(pRequestInfo, "accept", 0, "*/*", 0));
 
@@ -740,11 +754,43 @@ STATUS http_api_getIotCredential(PIotCredentialProvider pIotCredentialProvider)
     CHK_STATUS(NetIo_setRecvTimeout(xNetIoHandle, HTTP_API_COMPLETION_TIMEOUT));
     CHK_STATUS(NetIo_setSendTimeout(xNetIoHandle, HTTP_API_COMPLETION_TIMEOUT));
 
+    // Load certificates from cfgmgr and establish SSL connection BEFORE sending HTTP request
+    uint8_t caCertBuffer[4096];
+    uint8_t deviceCertBuffer[4096]; 
+    uint8_t privateKeyBuffer[4096];
+    size_t caCertSize = 0, deviceCertSize = 0, privateKeySize = 0;
+    
+    // Use cfgmgr file I/O to load certificate content
+    if (cfgmgr_dump(pIotCredentialProvider->caCertPath, caCertBuffer, sizeof(caCertBuffer), &caCertSize) == 0 &&
+        cfgmgr_dump(pIotCredentialProvider->certPath, deviceCertBuffer, sizeof(deviceCertBuffer), &deviceCertSize) == 0 &&
+        cfgmgr_dump(pIotCredentialProvider->privateKeyPath, privateKeyBuffer, sizeof(privateKeyBuffer), &privateKeySize) == 0) {
+        
+        printf("Loaded certificates from cfgmgr: CA=%d, Cert=%d, Key=%d bytes\n", (int)caCertSize, (int)deviceCertSize, (int)privateKeySize);
+        
+        // Null-terminate the certificate strings
+        caCertBuffer[caCertSize] = '\0';
+        deviceCertBuffer[deviceCertSize] = '\0';
+        privateKeyBuffer[privateKeySize] = '\0';
+        
+        // Use memory-based connection with actual certificate content
+        CHK_STATUS(NetIo_connectWithX509(xNetIoHandle, pHost, HTTP_API_SECURE_PORT, (char*)caCertBuffer, (char*)deviceCertBuffer, (char*)privateKeyBuffer));
+    } else {
+        printf("Failed to load certificates from cfgmgr, using file paths\n");
+        // Fallback to path-based if cfgmgr fails
+        CHK_STATUS(NetIo_connectWithX509Path(xNetIoHandle, pHost, HTTP_API_SECURE_PORT, pIotCredentialProvider->caCertPath,
+                                                pIotCredentialProvider->certPath, pIotCredentialProvider->privateKeyPath));
+    }
+
     CHK_STATUS(http_req_pack(pRequestInfo, HTTP_REQUEST_VERB_GET_STRING, pHost, MAX_CONTROL_PLANE_URI_CHAR_LEN, (PCHAR) pHttpSendBuffer,
                              HTTP_API_SEND_BUFFER_MAX_SIZE, FALSE, FALSE, NULL));
+    
+    printf("Thing Name: %s\n", pIotCredentialProvider->thingName);
+    printf("thing name length: %d\n", STRLEN(pIotCredentialProvider->thingName));
 
-    CHK_STATUS(NetIo_connectWithX509Path(xNetIoHandle, pHost, HTTP_API_SECURE_PORT, pIotCredentialProvider->caCertPath,
-                                         pIotCredentialProvider->certPath, pIotCredentialProvider->privateKeyPath));
+    printf("=== Full HTTP Request ===\n");
+    printf("length: %d\n", STRLEN((PCHAR) pHttpSendBuffer));
+    printf("%s\n", (char*)pHttpSendBuffer);
+    printf("=== End HTTP Request ===\n");
 
     CHK(NetIo_send(xNetIoHandle, (unsigned char*) pHttpSendBuffer, STRLEN((PCHAR) pHttpSendBuffer)) == STATUS_SUCCESS, STATUS_NET_SEND_DATA_FAILED);
 
@@ -756,6 +802,13 @@ STATUS http_api_getIotCredential(PIotCredentialProvider pIotCredentialProvider)
     pResponseStr = http_parser_getHttpBodyLocation(pHttpRspCtx);
     resultLen = http_parser_getHttpBodyLength(pHttpRspCtx);
     uHttpStatusCode = http_parser_getHttpStatusCode(pHttpRspCtx);
+
+    printf("=== IoT Credential HTTP Response ===\n");
+    printf("HTTP Status Code: %d\n", uHttpStatusCode);
+    printf("Response Body Length: %d\n", (int)resultLen);
+    if (pResponseStr != NULL && resultLen > 0) {
+        printf("Response Body: %.*s\n", (int)(resultLen > 500 ? 500 : resultLen), pResponseStr);
+    }
 
     // ATOMIC_STORE(&pSignalingClient->apiCallStatus, (SIZE_T) uHttpStatusCode);
     /* Check HTTP results */
