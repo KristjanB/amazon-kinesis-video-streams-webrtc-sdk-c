@@ -761,12 +761,10 @@ STATUS http_api_getIotCredential(PIotCredentialProvider pIotCredentialProvider)
     size_t caCertSize = 0, deviceCertSize = 0, privateKeySize = 0;
     
     // Use cfgmgr file I/O to load certificate content
-    if (cfgmgr_dump(pIotCredentialProvider->caCertPath, caCertBuffer, sizeof(caCertBuffer), &caCertSize) == 0 &&
-        cfgmgr_dump(pIotCredentialProvider->certPath, deviceCertBuffer, sizeof(deviceCertBuffer), &deviceCertSize) == 0 &&
-        cfgmgr_dump(pIotCredentialProvider->privateKeyPath, privateKeyBuffer, sizeof(privateKeyBuffer), &privateKeySize) == 0) {
-        
-        printf("Loaded certificates from cfgmgr: CA=%d, Cert=%d, Key=%d bytes\n", (int)caCertSize, (int)deviceCertSize, (int)privateKeySize);
-        
+    if (cfgmgr_file_read(pIotCredentialProvider->caCertPath, caCertBuffer, sizeof(caCertBuffer), &caCertSize) == 0 &&
+        cfgmgr_file_read(pIotCredentialProvider->certPath, deviceCertBuffer, sizeof(deviceCertBuffer), &deviceCertSize) == 0 &&
+        cfgmgr_file_read(pIotCredentialProvider->privateKeyPath, privateKeyBuffer, sizeof(privateKeyBuffer), &privateKeySize) == 0) {
+                
         // Null-terminate the certificate strings
         caCertBuffer[caCertSize] = '\0';
         deviceCertBuffer[deviceCertSize] = '\0';
@@ -783,14 +781,6 @@ STATUS http_api_getIotCredential(PIotCredentialProvider pIotCredentialProvider)
 
     CHK_STATUS(http_req_pack(pRequestInfo, HTTP_REQUEST_VERB_GET_STRING, pHost, MAX_CONTROL_PLANE_URI_CHAR_LEN, (PCHAR) pHttpSendBuffer,
                              HTTP_API_SEND_BUFFER_MAX_SIZE, FALSE, FALSE, NULL));
-    
-    printf("Thing Name: %s\n", pIotCredentialProvider->thingName);
-    printf("thing name length: %d\n", STRLEN(pIotCredentialProvider->thingName));
-
-    printf("=== Full HTTP Request ===\n");
-    printf("length: %d\n", STRLEN((PCHAR) pHttpSendBuffer));
-    printf("%s\n", (char*)pHttpSendBuffer);
-    printf("=== End HTTP Request ===\n");
 
     CHK(NetIo_send(xNetIoHandle, (unsigned char*) pHttpSendBuffer, STRLEN((PCHAR) pHttpSendBuffer)) == STATUS_SUCCESS, STATUS_NET_SEND_DATA_FAILED);
 
@@ -802,13 +792,6 @@ STATUS http_api_getIotCredential(PIotCredentialProvider pIotCredentialProvider)
     pResponseStr = http_parser_getHttpBodyLocation(pHttpRspCtx);
     resultLen = http_parser_getHttpBodyLength(pHttpRspCtx);
     uHttpStatusCode = http_parser_getHttpStatusCode(pHttpRspCtx);
-
-    printf("=== IoT Credential HTTP Response ===\n");
-    printf("HTTP Status Code: %d\n", uHttpStatusCode);
-    printf("Response Body Length: %d\n", (int)resultLen);
-    if (pResponseStr != NULL && resultLen > 0) {
-        printf("Response Body: %.*s\n", (int)(resultLen > 500 ? 500 : resultLen), pResponseStr);
-    }
 
     // ATOMIC_STORE(&pSignalingClient->apiCallStatus, (SIZE_T) uHttpStatusCode);
     /* Check HTTP results */
