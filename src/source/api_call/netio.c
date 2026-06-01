@@ -30,6 +30,7 @@
 #include "mbedtls/net.h"
 #endif
 #include "mbedtls/net_sockets.h"
+#include "mbedtls/ssl_ciphersuites.h"
 
 /* Public headers */
 #include "kvs/error.h"
@@ -37,6 +38,14 @@
 /* Internal headers */
 #include "netio.h"
 
+/* Cipher suite list: ECDHE-RSA-AES256-GCM-SHA384 only */
+const int NETIO_CIPHERSUITES[] = {
+    MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,  /* 0xC02B */
+    MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,    /* 0xC02F */
+    MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,  /* 0xC02C */
+    MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,    /* 0xC030 */
+    0
+};
 /******************************************************************************
  * DEFINITIONS
  ******************************************************************************/
@@ -115,6 +124,7 @@ static int prvInitConfig(NetIo_t* pxNet, const char* pcRootCA, const char* pcCer
             xRes = STATUS_NULL_ARG;
         } else {
             mbedtls_ssl_conf_rng(&(pxNet->xConf), mbedtls_ctr_drbg_random, &(pxNet->xCtrDrbg));
+            mbedtls_ssl_conf_ciphersuites(&(pxNet->xConf), NETIO_CIPHERSUITES);
             mbedtls_ssl_conf_read_timeout(&(pxNet->xConf), pxNet->uRecvTimeoutMs);
             NetIo_setSendTimeout(pxNet, pxNet->uSendTimeoutMs);
 

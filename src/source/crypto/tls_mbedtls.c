@@ -6,6 +6,16 @@
 #include "io_buffer.h"
 #include "Rtp.h"
 #include <string.h>
+#include "mbedtls/ssl_ciphersuites.h"
+
+/* Cipher suite list: ECDHE-RSA-AES256-GCM-SHA384 only */
+const int TLSIO_CIPHERSUITES[] = {
+    MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,  /* 0xC02B */
+    MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,    /* 0xC02F */
+    MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,  /* 0xC02C */
+    MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,    /* 0xC030 */
+    0
+};
 
 STATUS tls_session_create(PTlsSessionCallbacks pCallbacks, PTlsSession* ppTlsSession)
 {
@@ -121,6 +131,7 @@ STATUS tls_session_start(PTlsSession pTlsSession, BOOL isServer)
     mbedtls_ssl_conf_ca_chain(&pTlsSession->sslCtxConfig, &pTlsSession->cacert, NULL);
     mbedtls_ssl_conf_authmode(&pTlsSession->sslCtxConfig, MBEDTLS_SSL_VERIFY_REQUIRED);
     mbedtls_ssl_conf_rng(&pTlsSession->sslCtxConfig, mbedtls_ctr_drbg_random, &pTlsSession->ctrDrbg);
+    mbedtls_ssl_conf_ciphersuites(&pTlsSession->sslCtxConfig, TLSIO_CIPHERSUITES);
     CHK(mbedtls_ssl_setup(&pTlsSession->sslCtx, &pTlsSession->sslCtxConfig) == 0, STATUS_TLS_SSL_CTX_SETUP_FAILED);
     mbedtls_ssl_set_mtu(&pTlsSession->sslCtx, DEFAULT_MTU_SIZE);
     mbedtls_ssl_set_bio(&pTlsSession->sslCtx, pTlsSession, (mbedtls_ssl_send_t*) tls_session_sendCallback,

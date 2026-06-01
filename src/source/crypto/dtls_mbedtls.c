@@ -3,6 +3,7 @@
 #include "time_port.h"
 #include "dtls.h"
 #include "Rtp.h"
+#include "mbedtls/ssl_ciphersuites.h"
 
 /**  https://tools.ietf.org/html/rfc5764#section-4.1.2 */
 mbedtls_ssl_srtp_profile DTLS_SRTP_SUPPORTED_PROFILES[] = {
@@ -14,6 +15,15 @@ mbedtls_ssl_srtp_profile DTLS_SRTP_SUPPORTED_PROFILES[] = {
     MBEDTLS_SRTP_AES128_CM_HMAC_SHA1_80,
     MBEDTLS_SRTP_AES128_CM_HMAC_SHA1_32,
 #endif
+};
+
+/* Cipher suite list: ECDHE-RSA-AES256-GCM-SHA384 only */
+const int DTLSIO_CIPHERSUITES[] = {
+    MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,  /* 0xC02B */
+    MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,    /* 0xC02F */
+    MBEDTLS_TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,  /* 0xC02C */
+    MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,    /* 0xC030 */
+    0
 };
 
 STATUS dtls_session_create(PDtlsSessionCallbacks pDtlsSessionCallbacks, TIMER_QUEUE_HANDLE timerQueueHandle, INT32 certificateBits,
@@ -300,6 +310,7 @@ STATUS dtls_session_start(PDtlsSession pDtlsSession, BOOL isServer)
     // no need to verify since the certificate will be verified through SDP later
     mbedtls_ssl_conf_authmode(&pDtlsSession->sslCtxConfig, MBEDTLS_SSL_VERIFY_OPTIONAL);
     mbedtls_ssl_conf_rng(&pDtlsSession->sslCtxConfig, mbedtls_ctr_drbg_random, &pDtlsSession->ctrDrbg);
+    mbedtls_ssl_conf_ciphersuites(&pDtlsSession->sslCtxConfig, DTLSIO_CIPHERSUITES);
 
     for (i = 0; i < pDtlsSession->certificateCount; i++) {
         pCertInfo = pDtlsSession->certificates + i;
